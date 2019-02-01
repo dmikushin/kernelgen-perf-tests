@@ -1,8 +1,29 @@
-# KernelGen Stencil Performance test suite
+# KernelGen Stencil Performance Test Suite for CPU and GPU compilers
+
+This test suite is developed as a part of KernelGen project:
+
+```bibtex
+@inproceedings{Mikushin:2014:KDI:2672598.2672916,
+ author = {Mikushin, Dmitry and Likhogrud, Nikolay and Zhang, Eddy Z. and Bergstr\"{o}m, Christopher},
+ title = {KernelGen  --  The Design and Implementation of a Next Generation Compiler Platform for Accelerating Numerical Models on GPUs},
+ booktitle = {Proceedings of the 2014 IEEE International Parallel \& Distributed Processing Symposium Workshops},
+ series = {IPDPSW '14},
+ year = {2014},
+ isbn = {978-1-4799-4116-2},
+ pages = {1011--1020},
+ numpages = {10},
+ url = {http://dx.doi.org/10.1109/IPDPSW.2014.115},
+ doi = {10.1109/IPDPSW.2014.115},
+ acmid = {2672916},
+ publisher = {IEEE Computer Society},
+ address = {Washington, DC, USA},
+ keywords = {GPU, LLVM, OpenACC, JIT-compilation, stencils},
+}
+```
 
 ## Overview
 
-The test suite targets host CPU, NVIDIA GPU and Intel Xeon Phi with the following compiler toolchains:
+The test suite targets host CPUs, NVIDIA GPUs and Intel Xeon Phi accelerators with the following compiler toolchains:
 
  * `caps` : CAPS Enterprise Compiler, OpenACC backend (defunct)
  * `cuda` : NVIDIA CUDA Compiler
