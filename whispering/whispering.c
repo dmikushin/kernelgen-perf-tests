@@ -182,7 +182,7 @@ int main(int argc, char* argv[])
 
 	if (!e0[0] || !e0[1] || !e1[0] || !e1[1] || !h0 || !h1 || !u_em0 || !u_em1 || !ca || !cb || !da || !db)
 	{
-		printf("Error allocating memory for arrays: %p, %p, %p, %p, %p, %p, %p, %p, %p, %p\n",
+		printf("Error allocating memory for arrays: %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p\n",
 			e0[0], e0[1], e1[0], e1[1], h0, h1, u_em0, u_em1, ca, cb, da, db);
 		exit(1);
 	}
