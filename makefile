@@ -52,7 +52,7 @@ TARGETS_CUDA_CLEAN = $(addsuffix .cuda.clean, $(TARGETS))
 TARGETS_PATUS = $(addsuffix .patus, $(TARGETS))
 TARGETS_PATUS_CLEAN = $(addsuffix .patus.clean, $(TARGETS))
 
-.PHONY: all
+.PHONY: all benchmark
 
 all: gcc kernelgen mic pathscale pgi caps
 
@@ -140,9 +140,11 @@ test.pgi: $(TARGETS_PGI)
 test.caps: $(TARGETS_CAPS)
 	$(SILENT)./benchmark $(NX) $(NY) $(NS) $(NT) $(NRUNS) caps
 
-test.cuda: $(TARGETS_CAPS)
+test.cuda: $(TARGETS_CUDA)
 	$(SILENT)./benchmark $(NX) $(NY) $(NS) $(NT) $(NRUNS) cuda
 
 test.patus: $(TARGETS_PATUS)
 	$(SILENT)./benchmark $(NX) $(NY) $(NS) $(NT) $(NRUNS) patus
 
+benchmark:
+	$(SILENT)./benchmark $(NX) $(NY) $(NS) $(NT) $(NRUNS) $(TARGETS)
