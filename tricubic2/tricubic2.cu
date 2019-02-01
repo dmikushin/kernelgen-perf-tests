@@ -1,0 +1,1 @@
+tricubic2.c
