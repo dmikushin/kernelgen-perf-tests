@@ -25,8 +25,9 @@ SILENT =
 endif
 
 # GCC compiler/linker options
-GCC = gcc -O3 -D_GNU_SOURCE -std=c99
-GFORTRAN = gfortran -O3 $(szreal)
+GCCOPT = -O3 -ffast-math -march=native
+GCC = gcc $(GCCOPT) -D_GNU_SOURCE -std=c99
+GFORTRAN = gfortran $(GCCOPT) $(szreal)
 
 # KernelGen compiler/linker options
 KERNELGEN_GCC = kernelgen-gcc -O3 -D_GNU_SOURCE -std=c99
@@ -37,16 +38,16 @@ ICC = icc -O3 -D_GNU_SOURCE -D_MIC -std=c99 -openmp-report=2 -vec-report6 -opt-s
 IFORT = ifort -O3 -D_MIC -openmp-report=2 -vec-report6 -opt-subscript-in-range -align -offload-build $(szreal)
 
 # PGI/OpenACC compiler/linker options
-GPUARCH = 20
-GPUCUDA = 5.5
+GPUARCH = 60
+GPUCUDA = 10.0
 PGCC = pgcc -I. -acc -O3 -Minfo=accel -ta=nvidia:keep,cc$(GPUARCH),cuda$(GPUCUDA) -Wl,--wrap=__pgi_uacc_cuda_launch
 PGF90 = pgf90 -acc -O3 -Minfo=accel -ta=nvidia:keep,cc$(GPUARCH),cuda$(GPUCUDA) -Wl,--wrap=__pgi_uacc_cuda_launch $(pgi_szreal)
 PGCC_CUDA = pgcc -I. -O3
 PGF90_CUDA = pgf90 -O3 -Mcuda=keepgpu,keepbin,keepptx,ptxinfo,cc$(GPUARCH),cuda$(GPUCUDA) $(pgi_szreal) -D__CUDAFOR__
 
 # CAPS/OpenACC compiler/linker options
-CAPSCC = hmpp --openacc-target=CUDA -k -f --nvcc-options -O3,-arch,sm_$(GPUARCH) gcc -O3 -D_GNU_SOURCE -std=c99 -Wl,--wrap=openacci_call -Wl,--wrap=dlsym
-CAPSF90 = hmpp --openacc-target=CUDA -k -f --nvcc-options -O3,-arch,sm_$(GPUARCH) gfortran -O3 $(szreal) -Wl,--wrap=openacci_call -Wl,--wrap=dlsym
+CAPSCC = hmpp --openacc-target=CUDA -k -f --nvcc-options -O3,-arch,sm_$(GPUARCH) $(GCC) -Wl,--wrap=openacci_call -Wl,--wrap=dlsym
+CAPSF90 = hmpp --openacc-target=CUDA -k -f --nvcc-options -O3,-arch,sm_$(GPUARCH) $(GFORTRAN) -Wl,--wrap=openacci_call -Wl,--wrap=dlsym
 
 # PathScale/OpenACC compiler/linker options
 PATHHOME ?= /opt/enzo-5.0.0/
@@ -63,7 +64,7 @@ NVCC = nvcc -I. -I.. -O3 -arch=sm_$(GPUARCH) -Xptxas -v
 PATUS = patus
 
 # PATUS-specific GCC compiler options
-PATUS_GCC = gcc -O3 -mavx -fopenmp -std=c99 -D_GNU_SOURCE -D_PATUS
+PATUS_GCC = $(GCC) -mavx -fopenmp -std=c99 -D_GNU_SOURCE -D_PATUS
 
 # Default grid dimensions
 NX ?= 512
