@@ -41,7 +41,7 @@ NS ?= 256
 all: sincos
 
 sincos: main.o sincos.o timing.o cuda_profiling.o
-	$(SILENT)$(PGF90_CUDA) -Mnomain $^ $(LIBWRAPPER) -o $@ -lrt -L$(shell dirname $(shell which nvcc))/../lib64 -lcudart -lcuda -lstdc++ -lgcc_s -Wl,--wrap=cudaLaunch -Wl,--export-dynamic -ldl
+	$(SILENT)$(PGF90_CUDA) -Mnomain $^ $(LIBWRAPPER) -o $@ -lrt -L$(shell dirname $(shell which nvcc))/../lib64 -lcudart -lcuda -lstdc++ -lgcc_s -Wl,--wrap=cudaLaunch -Wl,--wrap=cudaLaunchKernel -Wl,--export-dynamic -ldl
 
 main.o: ../main.cu ../timing.h
 	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@

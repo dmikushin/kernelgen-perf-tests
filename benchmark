@@ -117,16 +117,31 @@ sub find_average
 	return $result;
 }
 
+# Add profiling env for CUDA targets.
+sub target_get_env
+{
+	my($test) = $_[0];
+	my($target) = $_[1];
+	
+	if ((($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and (-f "$test/$target/kernel"))
+	{
+		my($kernel_name) = `cat $test/$target/kernel`;
+		$kernel_name =~ s/\n//;
+		return "PROFILING_FNAME=$kernel_name";
+	}
+	
+	return "";
+}
+
 # Parse the test output.
 sub report_test
 {
 	my($target) = $_[0];
-	my($target_env) = $_[1];
-	my($name) = $_[2];
-	my($test) = $_[3];
-	my($output) = $_[4];
-	my($times_for_chart) = $_[5];
-	my($nregs_for_table) = $_[6];
+	my($test) = $_[1];
+	my($file) = $_[2];
+	my($output) = $_[3];
+	my($times_for_chart) = $_[4];
+	my($nregs_for_table) = $_[5];
 
 	my($init_mean) = find_average($output, "initial mean",
 		qr/initial\smean\s=\s([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
@@ -144,9 +159,9 @@ sub report_test
 		qr/compute\stime\s=\s([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)\ssec/);
 
 	my($kernel_name) = "";
-	if ((($target eq "kernelgen") or ($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and (-f "$test/kernel"))
+	if ((($target eq "kernelgen") or ($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and (-f "$file/kernel"))
 	{
-		$kernel_name = `cat $test/kernel`;
+		$kernel_name = `cat $file/kernel`;
 		$kernel_name =~ s/\n//;
 	}
 
@@ -172,8 +187,8 @@ sub report_test
 		my($joined_output) = $$output;
 		$joined_output =~ s/\n/ /g;
 		$joined_output =~ s/(avg=[0-9\,]+)/$1\n/g;
-		$joined_output =~ s/$name/\n$name/g;
-		$kernel_time = find_average(\$joined_output, "", qr/$name\s[^\n]*avg=([0-9\,]+)/);
+		$joined_output =~ s/$test/\n$test/g;
+		$kernel_time = find_average(\$joined_output, "", qr/$test\s[^\n]*avg=([0-9\,]+)/);
 		if ($kernel_time ne "N/A")
 		{
 			$kernel_time = $kernel_time / 1e6;
@@ -195,30 +210,30 @@ sub report_test
 	if ((($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and ($kernel_name ne ""))
 	{
 		my($regcount_output) = join("",
-			`bash -c "cd $test && PROFILING_FNAME=$kernel_name make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
+			`bash -c "cd $file && PROFILING_FNAME=$kernel_name make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
 		$kernel_nregs = find_average(\$regcount_output, "",
 			qr/$kernel_name\sregcount\s=\s([0-9]+)/);
 	}
 	if ($target eq "pathscale")
 	{
-		my($kernel_name_output) = join("", `bash -c "cd $test && nm $name | grep -E \"${name}_[_]?region 2>&1\""`);
+		my($kernel_name_output) = join("", `bash -c "cd $file && nm $test | grep -E \"${name}_[_]?region 2>&1\""`);
 		if ($kernel_name_output =~ m/(?<KERNEL_NAME>${name}_[_]?region_[\d]+_loop[\d]+)/xs)
 		{
 			my($kernel_name) = $+{KERNEL_NAME};
 			my($regcount_output) = join("",
-				`bash -c "cd $test && PROFILING_FNAME=$kernel_name make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
+				`bash -c "cd $file && PROFILING_FNAME=$kernel_name make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
 			$kernel_nregs = find_average(\$regcount_output, "",
 				qr/$kernel_name\sregcount\s=\s([0-9]+)/);
 		}
 	}
 	if ($target eq "pgi")
 	{
-		if ($$output =~ m/$name\s+NVIDIA\s+devicenum\=\d+\n\s*time\(us\)\:\s*[\d+|,]+\n\s*(?<LINENO>[0-9]+)\:\skernel\slaunched/xs)
+		if ($$output =~ m/$test\s+NVIDIA\s+devicenum\=\d+\n\s*time\(us\)\:\s*[\d+|,]+\n\s*(?<LINENO>[0-9]+)\:\skernel\slaunched/xs)
 		{
 			my($lineno) = $+{LINENO};
-			my($kernel_name) = "$name\_$lineno\_gpu";
+			my($kernel_name) = "$test\_$lineno\_gpu";
 			my($regcount_output) = join("",
-				`bash -c "cd $test && PROFILING_FNAME=$kernel_name PROFILING_LINENO=$lineno make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
+				`bash -c "cd $file && PROFILING_FNAME=$kernel_name PROFILING_LINENO=$lineno make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
 			$kernel_nregs = find_average(\$regcount_output, "",
 				qr/$kernel_name\:$lineno\sregcount\s=\s([0-9]+)/);
 		}
@@ -232,7 +247,7 @@ sub report_test
 			my($lineno) = $+{LINENO};
 			my($kernel_name) = $+{KERNEL_NAME};
 			my($regcount_output) = join("",
-				`bash -c "cd $test && PROFILING_FNAME=$kernel_name PROFILING_LINENO=$lineno make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
+				`bash -c "cd $file && PROFILING_FNAME=$kernel_name PROFILING_LINENO=$lineno make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
 			$kernel_nregs = find_average(\$regcount_output, "",
 				qr/$kernel_name\:$lineno\sregcount\s=\s([0-9]+)/);
 			$kernel_time = find_average(\$regcount_output, "",
@@ -260,33 +275,26 @@ sub report_test
 	print_field($free_time);
 	print_field($final_mean);
 	
-	if ($target_env ne "")
-	{
-		$$times_for_chart{$name}{"$target^$target_env"} = $kernel_time;
-		$$nregs_for_table{$name}{"$target^$target_env"} = $kernel_nregs;
-	}
-	else
-	{
-		$$times_for_chart{$name}{"$target"} = $kernel_time;
-		$$nregs_for_table{$name}{"$target"} = $kernel_nregs;
-	}
+	$$times_for_chart{$test}{$target . "^" . target_get_env($test, $target)} = $kernel_time;
+	$$nregs_for_table{$test}{$target . "^" . target_get_env($test, $target)} = $kernel_nregs;
 
 	print "|\n";
 }
 
 sub run_test
 {
-	my($target_name) = $_[0];
-	my($target_env) = $_[1];
-	my($name) = $_[2];
-	my($test) = $_[3];
-	my($nx) = $_[4];
-	my($ny) = $_[5];
-	my($ns) = $_[6];
-	my($niters) = $_[7];
-	my($output) = $_[8];
+	my($target) = $_[0];
+	my($test) = $_[1];
+	my($folder) = $_[2];
+	my($nx) = $_[3];
+	my($ny) = $_[4];
+	my($ns) = $_[5];
+	my($niters) = $_[6];
+	my($output) = $_[7];
 
-	$$output .= join("", `bash -c "cd $test && $target_env make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
+	my($target_env) = target_get_env($test, $target);
+
+	$$output .= join("", `bash -c "cd $folder && $target_env make test NX=$nx NY=$ny NS=$ns NT=$niters 2>&1"`);
 }
 
 my($table_width) = 148;
@@ -320,6 +328,8 @@ foreach $file (@files)
 	next unless ($at_least_one_target == 1);
 
 	push(@tests, $file);
+	
+	print "Found test $file\n";
 }
 
 # For each run:
@@ -340,7 +350,7 @@ for ( ; $irun < $nruns; $irun++)
 	{
 		# If using one of known GPU-enabled targets, display
 		# the list of available GPUs.
-		if (grep( /^kernelgen$/, @targets) or grep( /^pathscale$/, @targets) or grep( /^pgi$/, @targets) or grep( /^caps$/, @targets))
+		if (grep( /^kernelgen$/, @targets) or grep( /^pathscale$/, @targets) or grep( /^pgi$/, @targets) or grep( /^caps$/, @targets) or grep( /^cuda$/, @targets) or grep( /^gcc$/, @targets))
 		{
 			print "---- Using the following CUDA driver: ----\n";
 			my($nvidia_driver) = join("", `cat /proc/driver/nvidia/version`);
@@ -378,6 +388,20 @@ for ( ; $irun < $nruns; $irun++)
 				print "$caps_version";
 				print "-------------------------------------------\n\n";
 			}
+			if (grep( /^cuda$/, @targets))
+			{
+				print "---- Using the following NVIDIA compiler: ----\n";
+				my($cuda_version) = join("", `nvcc --version 2>&1`);
+				print "$cuda_version";
+				print "-------------------------------------------\n\n";
+			}
+			if (grep( /^gcc$/, @targets))
+			{
+				print "---- Using the following GCC compiler: ----\n";
+				my($gcc_version) = join("", `gcc --version 2>&1`);
+				print "$gcc_version";
+				print "-------------------------------------------\n\n";
+			}
 		}
 	}
 	if ($nruns > 1)
@@ -392,7 +416,7 @@ for ( ; $irun < $nruns; $irun++)
 	print "-" x $table_width . "\n";
 
 	# For each test:
-	foreach $file (@tests)
+	foreach $test (@tests)
 	{
 		# For each selected target:
 		foreach $target (@targets)
@@ -414,46 +438,38 @@ for ( ; $irun < $nruns; $irun++)
 
 			# Skip some tests, depending on target.
 			if ((($target_name eq "kernelgen") or ($target_name eq "pathscale") or ($target_name eq "pgi") or ($target_name eq "caps")) and
-				(($file eq "tricubic2") or ($file eq "whispering")))
+				(($test eq "tricubic2") or ($test eq "whispering")))
 			{
 				next;
 			}
-			if (($target_name eq "patus") and (($file eq "sincos") or ($file eq "matmul")))
+			if (($target_name eq "patus") and (($test eq "sincos") or ($test eq "matmul")))
 			{
 				next;
 			}
 
-			print_string($file, 10);
+			print_string($test, 10);
 			print_string($target_name, 21);
 
-			my($test) = "$dir/$file/$target_name";
-
-			# Add profiling env for CUDA targets.
-			if ((($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and (-f "$test/kernel"))
-			{
-				$kernel_name = `cat $test/kernel`;
-				$kernel_name =~ s/\n//;
-				$target_env .= " PROFILING_FNAME=$kernel_name";
-			}
+			my($file) = "$dir/$test/$target_name";
 
 			# Consider only tests with existing folder for target
 			if (!-d "$test")
 			{
 				my($output) = "";
-				report_test($target_name, $target_env, $file, $test, \$output, \%times_for_chart, \%nregs_for_table);
+				report_test($target_name, $test, $file, \$output, \%times_for_chart, \%nregs_for_table);
 				next;
 			}
 
 			if ($irun == 0)
 			{
-				$outputs{$target_name}{$file} = "";
+				$outputs{$target_name}{$test} = "";
 			}
 
 			my($output) = "";
-			run_test($target_name, $target_env, $file, $test, $nx, $ny, $ns, $niters, \$output);
-			$outputs{$file}{$target} .= $output;
+			run_test($target_name, $test, $file, $nx, $ny, $ns, $niters, \$output);
+			$outputs{$test}{$target} .= $output;
 
-			report_test($target_name, $target_env, $file, $test, \$output, \%times_for_chart, \%nregs_for_table);
+			report_test($target_name, $test, $file, \$output, \%times_for_chart, \%nregs_for_table);
 		}
 	}
 
@@ -477,7 +493,7 @@ if ($nruns != 1)
 	print "-" x $table_width . "\n";
 
 	# For each test:
-	foreach $file (@tests)
+	foreach $test (@tests)
 	{
 		# For each selected target:
 		foreach $target (@targets)
@@ -499,37 +515,29 @@ if ($nruns != 1)
 
 			# Skip some tests, depending on target.
 			if ((($target_name eq "kernelgen") or ($target_name eq "pathscale") or ($target_name eq "pgi") or ($target_name eq "caps")) and
-				(($file eq "tricubic2") or ($file eq "whispering")))
+				(($test eq "tricubic2") or ($test eq "whispering")))
 			{
 				next;
 			}
-			if (($target_name eq "patus") and (($file eq "sincos") or ($file eq "matmul")))
+			if (($target_name eq "patus") and (($test eq "sincos") or ($test eq "matmul")))
 			{
 				next;
 			}
 
-			print_string($file, 10);
+			print_string($test, 10);
 			print_string($target_name, 21);
 
-			my($test) = "$dir/$file/$target_name";
-
-			# Add profiling env for CUDA targets.
-			if ((($target =~ m/^cuda.*$/) or ($target eq "ppcg")) and (-f "$test/kernel"))
-			{
-				$kernel_name = `cat $test/kernel`;
-				$kernel_name =~ s/\n//;
-				$target_env .= " PROFILING_FNAME=$kernel_name";
-			}
+			my($file) = "$dir/$test/$target_name";
 
 			# Consider only tests with existing folder for target
 			if (!-d "$test")
 			{
 				my($output) = "";
-				report_test($target_name, $target_env, $file, $test, \$output);
+				report_test($target_name, $test, $file, \$output);
 				next;
 			}
 
-			report_test($target_name, $target_env, $file, $test, \$outputs{$file}{$target}, \%times_for_chart);
+			report_test($target_name, $test, $file, \$outputs{$test}{$target}, \%times_for_chart);
 		}
 	}
 
@@ -542,22 +550,28 @@ if ($nruns != 1)
 if (scalar(@targets) == 2)
 {
 	print "\nTimes for chart >>\n";
-	foreach $file (@tests)
+	foreach $test (@tests)
 	{
 		my(@values) = ();
-		foreach $target (@targets)
+		foreach $target_ (@targets)
 		{
-			my($value) = $times_for_chart{$file}{$target};
+			my($target) = $target_ . "^" . target_get_env($test, $target_);
+
+			my($value) = $times_for_chart{$test}{$target};
 			if (defined($value))
 			{
 				push(@values, $value);
+			}
+			else
+			{
+				print STDERR "Could not parse time measurement for $test/$target\n";
 			}
 		}
 		if (scalar(@values) == 2)
 		{
 			if (($values[0] ne "N/A") and ($values[1] ne "N/A"))
 			{
-				print $file . " " . $values[0] . " " . $values[1] . " => " . ($values[1] / $values[0]) . "\n";
+				print $test . " " . $values[0] . " " . $values[1] . " => " . ($values[1] / $values[0]) . "\n";
 			}
 		}
 	}
@@ -582,17 +596,19 @@ if (scalar(@targets) > 0)
 		print " & time & nregs";
 	}
 	print " \\\\\n";
-	foreach $file (@tests)
+	foreach $test (@tests)
 	{
 		my($fully_missing_test) = 1;
-		foreach $target (@targets)
+		foreach $target_ (@targets)
 		{
-			if (defined($times_for_chart{$file}{$target}))
+			my($target) = $target_ . "^" . target_get_env($test, $target_);
+
+			if (defined($times_for_chart{$test}{$target}))
 			{
 				$fully_missing_test = 0;
 				last;
 			}
-			if (defined($nregs_for_table{$file}{$target}))
+			if (defined($nregs_for_table{$test}{$target}))
 			{
 				$fully_missing_test = 0;
 				last;
@@ -602,22 +618,29 @@ if (scalar(@targets) > 0)
 		{
 			next;
 		}
-		foreach $target (@targets)
+		foreach $target_ (@targets)
 		{
-			if (!defined($times_for_chart{$file}{$target}))
+			my($target) = $target_ . "^" . target_get_env($test, $target_);
+
+			if (!defined($times_for_chart{$test}{$target}))
 			{
-				$times_for_chart{$file}{$target} = "N/A";
+				$times_for_chart{$test}{$target} = "N/A";
 			}
-			if (!defined($nregs_for_table{$file}{$target}))
+			if (!defined($nregs_for_table{$test}{$target}))
 			{
-				$nregs_for_table{$file}{$target} = "N/A";
+				$nregs_for_table{$test}{$target} = "N/A";
 			}
 		}
-		$i = 1;
-		print "$file & " . $times_for_chart{$file}{$targets[0]} . " & " . $nregs_for_table{$file}{$targets[0]};
-		for ( ; $i < scalar(@targets); $i++)
+		for ($i = 0 ; $i < scalar(@targets); $i++)
 		{
-			print " & " . $times_for_chart{$file}{$targets[$i]} . " & " . $nregs_for_table{$file}{$targets[$i]};
+			if ($i == 0)
+			{
+				print "$test";
+			}
+
+			my($target) = $targets[$i] . "^" . target_get_env($test, $targets[$i]);
+		
+			print " & " . $times_for_chart{$test}{$target} . " & " . $nregs_for_table{$test}{$target};
 		}
 		print " \\\\\n";
 	}
@@ -625,20 +648,21 @@ if (scalar(@targets) > 0)
 print "<< Data for table\n";
 
 # Make up output data for KernelGen build report
-print "Data for report >>\n";
+print "\nData for report >>\n";
 if (grep(/^kernelgen$/, @targets))
 {
-	foreach $file (@tests)
+	foreach $test (@tests)
 	{
-		if (!defined($times_for_chart{$file}{"kernelgen"}))
+		if (!defined($times_for_chart{$test}{"kernelgen"}))
 		{
-			$times_for_chart{$file}{"kernelgen"} = "N/A";
+			$times_for_chart{$test}{"kernelgen"} = "N/A";
 		}
-		if (!defined($nregs_for_table{$file}{"kernelgen"}))
+		if (!defined($nregs_for_table{$test}{"kernelgen"}))
 		{
-			$nregs_for_table{$file}{"kernelgen"} = "N/A";
+			$nregs_for_table{$test}{"kernelgen"} = "N/A";
 		}
-		print "$file & " . $times_for_chart{$file}{"kernelgen"} . " & " . $nregs_for_table{$file}{"kernelgen"} . "\n";
+		print "$test & " . $times_for_chart{$test}{"kernelgen"} . " & " . $nregs_for_table{$test}{"kernelgen"} . "\n";
 	}
 }
 print "<< Data for report\n";
+

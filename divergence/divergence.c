@@ -49,9 +49,9 @@ void divergence(int nx, int ny, int ns,
 	real* u, real* ux, real* uy, real* uz)
 {
 #if defined(__CUDACC__)
-	#define i_stride (config.strideDim.x)
-	#define j_stride (config.strideDim.y)
 	#define k_stride (config.strideDim.z)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define k_offset (blockIdx.z * blockDim.z + threadIdx.z)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)

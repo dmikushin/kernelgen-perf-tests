@@ -47,17 +47,17 @@ extern "C" __global__
 #endif
 void whispering(int nx, int ny,
 #if defined(__CUDACC__)
-	int i_stride, int j_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	const real mu, const real epsilon,
 	real* e0[2], real* e1[2], real* h0, real* h1, real* u_em0, real* u_em1,
 	real* ca, real* cb, real* da, real* db)
 {
 #if defined(__CUDACC__)
-	#define k_offset (blockIdx.z * blockDim.z + threadIdx.z)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
-	#define k_increment k_stride
 	#define j_increment j_stride
 	#define i_increment i_stride
 #else
@@ -293,12 +293,12 @@ int main(int argc, char* argv[])
 	CUDA_SAFE_CALL(cudaMalloc(&e1_1_dev, szarrayb));
 	CUDA_SAFE_CALL(cudaMalloc(&h0_dev, szarrayb));
 	CUDA_SAFE_CALL(cudaMalloc(&h1_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(u_em0_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(u_em1_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(ca_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(cb_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(da_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(db_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&u_em0_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&u_em1_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&ca_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&cb_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&da_dev, szarrayb));
+	CUDA_SAFE_CALL(cudaMalloc(&db_dev, szarrayb));
 	get_time(&alloc_f);
 #endif
 	double alloc_t = get_time_diff((struct timespec*)&alloc_s, (struct timespec*)&alloc_f);
@@ -379,8 +379,8 @@ int main(int argc, char* argv[])
 		nocopy(db:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, 1, &config);
 #endif
 	{
 		E *e0p = &e0, *e1p = &e1;
@@ -392,8 +392,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			whispering(nx, ny, mu, epsilon, *e0p, *e1p, h0p, h1p, u_em0p, u_em1p, ca, cb, da, db);
 #else
-			whispering<<<gridDim, blockDim>>>(nx, ny,
-				strideDim.x, strideDim.y,
+			whispering<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny,
+				config,
 				mu, epsilon, *e0p, *e1p, h0p, h1p, u_em0p, u_em1p, ca, cb, da, db);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());

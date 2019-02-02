@@ -34,6 +34,16 @@ The test suite targets host CPUs, NVIDIA GPUs and Intel Xeon Phi accelerators wi
  * `patus` : PATUS Framework for Parallel Iterative Stencil Computations
  * `pgi` : PGI OpenACC Compiler (now owned by NVIDIA)
 
+## Prerequisites
+
+Make sure the toolchains intended for performance testsing are available from the command line, e.g. GCC compiler, NVIDIA `nvcc` compiler, PGI `pgcc` and `pgfortran` compilers and so on.
+
+If you plan to plot performance results, install `gnuplot`:
+
+```
+sudo apt install gnuplot
+```
+
 ## Deployment
 
 Build every test of the suite for selected toolchains with e.g. the following `make` command:
@@ -42,3 +52,14 @@ Build every test of the suite for selected toolchains with e.g. the following `m
 make gcc cuda
 ```
 
+Run tests for selected toolchains and dump performance results into a file:
+
+```
+make benchmark TARGETS="cuda gcc" >TEST.double.gtx1060m
+```
+
+Plot performance results into a pdf figure:
+
+```
+./mkchart -second2all -ylabel "Absolute speedup against CPU version" TEST.double.gtx1060m -o TEST.double.gtx1060m.pdf
+```

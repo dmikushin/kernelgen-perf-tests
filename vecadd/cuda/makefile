@@ -34,7 +34,7 @@ NS ?= 256
 all: vecadd
 
 vecadd: vecadd.o timing.o cuda_profiling.o
-	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xcompiler -rdynamic -ldl
+	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic -ldl
 
 vecadd.o: ../vecadd.cu ../timing.h cuda_profiling.h
 	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@

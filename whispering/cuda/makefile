@@ -10,7 +10,44 @@
 
 -include ../../makefile.in
 
-all:
+# Verbose setting
+VERBOSE ?= 0
+SILENT ?= @
+ifeq ($(VERBOSE), 1)
+SILENT =
+endif
+
+# Floating-point type: float or double
+real ?= float
+
+# PGI/OpenACC compiler/linker options
+GPUARCH ?= 20
+GPUCUDA ?= 5.0
+NVCC ?= nvcc -I. -I.. -O3 -arch=sm_$(GPUARCH)
+PGFC ?= pgfortran -O3 $(pgi_szreal)
+
+# Default problem domain dimensions
+NX ?= 512
+NY ?= 256
+NS ?= 256
+
+all: whispering
+
+whispering: whispering.o timing.o cuda_profiling.o
+	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic -ldl
+
+whispering.o: ../whispering.cu ../timing.h cuda_profiling.h
+	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@
+
+timing.o: ../timing.c ../timing.h
+	$(SILENT)$(NVCC) -c $< -o $@
+
+cuda_profiling.o: cuda_profiling.cu cuda_profiling.h
+	$(SILENT)$(NVCC) -c $< -o $@
 
 clean:
+	$(SILENT)rm -rf *.o whispering
+
+test: whispering
+	$(SILENT)./$< $(NX) $(NY) $(NS) $(NT)
 

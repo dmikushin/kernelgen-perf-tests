@@ -44,12 +44,15 @@ extern "C" __global__
 #endif
 void gradient(int nx, int ny, int ns,
 #if defined(__CUDACC__)
-	int i_stride, int j_stride, int k_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	const real alpha, const real beta, const real gamma,
 	real* u, real* ux, real* uy, real* uz)
 {
 #if defined(__CUDACC__)
+	#define k_stride (config.strideDim.z)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define k_offset (blockIdx.z * blockDim.z + threadIdx.z)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
@@ -288,8 +291,8 @@ int main(int argc, char* argv[])
 		nocopy(uz:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, ns, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, ns, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -302,8 +305,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			gradient(nx, ny, ns, alpha, beta, gamma, up, uxp, uyp, uzp);
 #else
-			gradient<<<gridDim, blockDim>>>(nx, ny, ns,
-				strideDim.x, strideDim.y, strideDim.z,
+			gradient<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny, ns,
+				config,
 				alpha, beta, gamma, up, uxp, uyp, uzp);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());

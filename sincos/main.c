@@ -222,8 +222,8 @@ int main(int argc, char* argv[])
 		nocopy(xy:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, ns, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, ns, &config);
 #endif
 	{
 		for (int it = 0; it < nt; it++)
@@ -236,8 +236,8 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			sincos_(&nx, &ny, &ns, x, y, xy);
 #else
-			sincos_<<<gridDim, blockDim>>>(nx, ny, ns,
-				strideDim.x, strideDim.y, strideDim.z,
+			sincos_<<<config.gridDim, config.blockDim>>>(nx, ny, ns,
+				config.strideDim.x, config.strideDim.y, config.strideDim.z,
 				x_dev, y_dev, xy_dev);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaStreamSynchronize(0));

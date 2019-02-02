@@ -206,3 +206,45 @@ extern "C" cudaError_t __wrap_cudaLaunch(const void *func)
 	return result;
 }
 
+extern "C" cudaError_t __real_cudaLaunchKernel(
+	const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream);
+
+extern "C" cudaError_t __wrap_cudaLaunchKernel(
+	const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
+{
+	if (!wrapper_funcname)
+		return __real_cudaLaunchKernel(func, gridDim, blockDim, args, sharedMem, stream);
+
+	// Find out the kernel name.
+	Dl_info info;
+	if (dladdr(func, &info) == 0)
+	{
+		fprintf(stderr, "Error in dladdr(%p, %p): %s\n", func, &info, dlerror());
+		exit(-1);
+	}
+	if (info.dli_saddr != func)
+	{
+		fprintf(stderr, "Cannot find kernel name for address %p\n", func);
+		exit(-1);
+	}
+	const char* kernel_name = info.dli_sname;
+
+	// Get the kernel register count.
+	struct cudaFuncAttributes attrs;
+	CUDA_SAFE_CALL(cudaFuncGetAttributes(&attrs, func));
+	printf("%s regcount = %d\n", kernel_name, attrs.numRegs);
+
+	// Get the kernel execution time.
+	struct timespec start, finish;
+	get_time(&start);
+	cudaError_t result = __real_cudaLaunchKernel(func, gridDim, blockDim, args, sharedMem, stream);
+	CUDA_SAFE_CALL(cudaDeviceSynchronize());
+	get_time(&finish);
+	double kernel_time = get_time_diff(&start, &finish);
+	if (kernel_name)
+		printf("%s kernel time = %f\n", kernel_name, kernel_time);
+	else
+		printf("kernel time = %f\n", kernel_time);
+	return result;
+}
+

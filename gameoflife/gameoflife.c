@@ -42,11 +42,13 @@ extern "C" __global__
 #endif
 void gameoflife(int nx, int ny,
 #if defined(__CUDACC__)
-	int i_stride, int j_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	real* u0, real* u1)
 {
 #if defined(__CUDACC__)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
 	#define j_increment j_stride
@@ -260,8 +262,8 @@ int main(int argc, char* argv[])
 		nocopy(u1:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, 1, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -275,8 +277,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			gameoflife(nx, ny, u0p, u1p);
 #else
-			gameoflife<<<gridDim, blockDim>>>(nx, ny,
-				strideDim.x, strideDim.y,
+			gameoflife<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny,
+				config,
 				u0p, u1p);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());

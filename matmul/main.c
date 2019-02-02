@@ -225,8 +225,8 @@ int main(int argc, char* argv[])
 		nocopy(C:length(szarrayC) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, ns, &config);
 #endif
 	{
 		for (int it = 0; it < nt; it++)
@@ -234,8 +234,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			matmul_(&nx, &ny, &ns, A, B, C);
 #else
-			matmul_<<<gridDim, blockDim>>>(nx, ny, ns,
-				strideDim.x, strideDim.y,
+			matmul_<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny, ns,
+				config.strideDim.x, config.strideDim.y,
 				A_dev, B_dev, C_dev);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaStreamSynchronize(0));

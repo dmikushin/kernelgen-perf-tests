@@ -37,11 +37,12 @@ extern "C" __global__
 #endif
 void matvec(int nx, int ny,
 #if defined(__CUDACC__)
-	int i_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	real* A, real* x, real* y)
 {
 #if defined(__CUDACC__)
+	#define i_stride (config.strideDim.x)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
 	#define i_increment i_stride
 #else
@@ -249,8 +250,8 @@ int main(int argc, char* argv[])
 		nocopy(y:length(ny) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, 1, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, 1, 1, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -262,8 +263,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			matvec(nx, ny, Ap, xp, yp);
 #else
-			matvec<<<gridDim, blockDim>>>(nx, ny,
-				strideDim.x,
+			matvec<<<config.gridDim, config.blockDim>>>(
+				nx, ny,
+				config,
 				Ap, xp, yp);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());

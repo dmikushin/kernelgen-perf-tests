@@ -225,8 +225,8 @@ int main(int argc, char* argv[])
 		nocopy(w1:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, 1, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -244,8 +244,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			jacobi_(&nx, &ny, &c0, &c1, &c2, w0p, w1p);
 #else
-			jacobi_<<<gridDim, blockDim>>>(nx, ny,
-				strideDim.x, strideDim.y,
+			jacobi_<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny,
+				config.strideDim.y, config.strideDim.x,
 				c0, c1, c2, w0p, w1p);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaStreamSynchronize(0));

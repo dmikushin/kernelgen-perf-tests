@@ -44,12 +44,15 @@ extern "C" __global__
 #endif
 void uxx1(int nx, int ny, int ns,
 #if defined(__CUDACC__)
-	int i_stride, int j_stride, int k_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	const real c1, const real c2,
 	real* u0, real* u1, real* d1, real* xx, real* xy, real* xz)
 {
 #if defined(__CUDACC__)
+	#define k_stride (config.strideDim.z)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define k_offset (blockIdx.z * blockDim.z + threadIdx.z)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
@@ -314,8 +317,8 @@ int main(int argc, char* argv[])
 		nocopy(xz:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, ns, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, ns, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -330,8 +333,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			uxx1(nx, ny, ns, c1, c2, u0p, u1p, d1, xx, xy, xz);
 #else
-			uxx1<<<gridDim, blockDim>>>(nx, ny, ns,
-				strideDim.x, strideDim.y, strideDim.z,
+			uxx1<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny, ns,
+				config,
 				c1, c2, u0p, u1p, d1p, xxp, xyp, xzp);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());

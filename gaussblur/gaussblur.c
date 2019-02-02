@@ -43,13 +43,15 @@ extern "C" __global__
 #endif
 void gaussblur(int nx, int ny,
 #if defined(__CUDACC__)
-	int i_stride, int j_stride,
+	kernelgen_cuda_config_t config,
 #endif
 	const real s0, const real s1, const real s2,
 	const real s4, const real s5, const real s8,
 	real* w0, real* w1)
 {
 #if defined(__CUDACC__)
+	#define j_stride (config.strideDim.y)
+	#define i_stride (config.strideDim.x)
 	#define j_offset (blockIdx.y * blockDim.y + threadIdx.y)
 	#define i_offset (blockIdx.x * blockDim.x + threadIdx.x)
 	#define j_increment j_stride
@@ -271,8 +273,8 @@ int main(int argc, char* argv[])
 		nocopy(w1:length(szarray) alloc_if(0) free_if(0))
 #endif
 #if defined(__CUDACC__)
-	dim3 gridDim, blockDim, strideDim;
-	kernelgen_cuda_configure_gird(nx, ny, 1, &gridDim, &blockDim, &strideDim);
+	kernelgen_cuda_config_t config;
+	kernelgen_cuda_configure_gird(1, nx, ny, 1, &config);
 #endif
 	{
 #if !defined(__CUDACC__)
@@ -285,8 +287,9 @@ int main(int argc, char* argv[])
 #if !defined(__CUDACC__)
 			gaussblur(nx, ny, s0, s1, s2, s4, s5, s8, w0p, w1p);
 #else
-			gaussblur<<<gridDim, blockDim>>>(nx, ny,
-				strideDim.x, strideDim.y,
+			gaussblur<<<config.gridDim, config.blockDim, config.szshmem>>>(
+				nx, ny,
+				config,
 				s0, s1, s2, s4, s5, s8, w0p, w1p);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());
