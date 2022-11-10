@@ -13,9 +13,7 @@
 TARGETS = \
 	divergence \
 	 gaussblur \
-	    jacobi \
 	 laplacian \
-	    matmul \
 	    matvec \
 	  tricubic \
 	      uxx1 \
@@ -23,7 +21,6 @@ TARGETS = \
 	gameoflife \
 	  gradient \
 	   lapgsrb \
-	    sincos \
 	 tricubic2 \
 	    vecadd \
 	whispering
