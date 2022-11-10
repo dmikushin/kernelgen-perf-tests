@@ -34,7 +34,7 @@ NS ?= 256
 all: laplacian
 
 laplacian: laplacian.o timing.o cuda_profiling.o
-	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic -ldl
+	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic --cudart=shared -ldl
 
 laplacian.o: ../laplacian.cu ../timing.h cuda_profiling.h
 	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@

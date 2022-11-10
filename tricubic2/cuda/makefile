@@ -34,7 +34,7 @@ NS ?= 256
 all: tricubic2
 
 tricubic2: tricubic2.o timing.o cuda_profiling.o
-	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic -ldl
+	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic --cudart=shared -ldl
 
 tricubic2.o: ../tricubic2.cu ../timing.h cuda_profiling.h
 	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@

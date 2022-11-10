@@ -166,6 +166,7 @@ void kernelgen_cuda_config_dispose(kernelgen_cuda_config_t* config)
 	CUDA_SAFE_CALL(cudaFree(config->shmem_arrays));
 }
 
+#if 0
 extern "C" cudaError_t __real_cudaLaunch(const void *func);
 
 extern "C" cudaError_t __wrap_cudaLaunch(const void *func)
@@ -205,6 +206,7 @@ extern "C" cudaError_t __wrap_cudaLaunch(const void *func)
 		printf("kernel time = %f\n", kernel_time);
 	return result;
 }
+#endif
 
 extern "C" cudaError_t __real_cudaLaunchKernel(
 	const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream);

@@ -34,7 +34,7 @@ NS ?= 256
 all: matvec
 
 matvec: matvec.o timing.o cuda_profiling.o
-	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic -ldl
+	$(SILENT)$(NVCC) $^ -o $@ -lrt -Xlinker --wrap=cudaLaunch -Xlinker --wrap=cudaLaunchKernel -Xcompiler -rdynamic --cudart=shared -ldl
 
 matvec.o: ../matvec.cu ../timing.h cuda_profiling.h
 	$(SILENT)$(NVCC) -Dreal=$(real) -c $< -o $@

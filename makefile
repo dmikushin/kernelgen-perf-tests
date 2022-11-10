@@ -54,7 +54,7 @@ TARGETS_PATUS_CLEAN = $(addsuffix .patus.clean, $(TARGETS))
 
 .PHONY: all benchmark
 
-all: gcc kernelgen mic pathscale pgi caps
+all: gcc kernelgen mic pathscale pgi caps cuda
 
 gcc: $(TARGETS_GCC)
 
