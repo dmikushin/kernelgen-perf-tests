@@ -28,13 +28,13 @@
 #define MEMALIGN 4096
 
 #define _A(array, ix, iy) (array[(ix) + nx * (iy)])
+#define _A3(array, ix, iy, is) (array[(ix) + nx * (iy) + nx * ny * (is)])
 
 // PATUS-generated kernel declaration.
 #if defined(_PATUS)
 void whispering_patus(
 	real** dummy1, real** dummy2, real** dummy3, real** dummy4,
-	real* e0_0, real* e0_1, real* e1_0, real* e1_1,
-	real* h0, real* h1, real* u_em0, real* u_em1,
+	real* e, real* h0, real* h1, real* u_em0, real* u_em1,
 	real* ca, real* cb, real* da, real* db,
 	real mu, real epsilon, int nx, int ny);
 #endif
@@ -50,7 +50,7 @@ void whispering(int nx, int ny,
 	kernelgen_cuda_config_t config,
 #endif
 	const real mu, const real epsilon,
-	real* e0[2], real* e1[2], real* h0, real* h1, real* u_em0, real* u_em1,
+	real* e, real* h0, real* h1, real* u_em0, real* u_em1,
 	real* ca, real* cb, real* da, real* db)
 {
 #if defined(__CUDACC__)
@@ -68,25 +68,18 @@ void whispering(int nx, int ny,
 	#define j_increment 1
 	#define i_increment 1
 #endif
-	real *e0_0 = NULL;
-	real *e0_1 = NULL;
-	real *e1_0 = NULL;
-	real *e1_1 = NULL;
 #if defined(_PATUS)
 	real *dummy1, *dummy2, *dummy3, *dummy4;
 	#pragma omp parallel
 	whispering_patus(&dummy1, &dummy2, &dummy3, &dummy4,
-		e0[0], e0[1], e1[0], e1[1], h0, h1, u_em0, u_em1,
+		e, h0, h1, u_em0, u_em1,
 		ca, cb, da, db, mu, epsilon, nx, ny);
 #else
 #if defined(_OPENACC)
 	size_t szarray = (size_t)nx * ny;
-	e0_0 = e0[0];
-	e0_1 = e0[1];
-	#pragma acc kernels loop independent gang(65535), present(e0_0[0:szarray], e0_1[0:szarray])
-//		e1[0][0:szarray], e1[1][0:szarray], h0[0:szarray], h1[0:szarray], \
-//		u_em0[0:szarray])
-// u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
+	#pragma acc kernels loop independent gang(65535), present(e[0:2 * szarray], \
+		e[0:2 * szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], \
+		ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
 #endif
 #if defined(_OPENMP) || defined(_MIC)
 	#pragma omp parallel for
@@ -98,19 +91,19 @@ void whispering(int nx, int ny,
 #endif
 		for (int i = 1 + i_offset; i < nx - 1; i += i_increment)
 		{
-			real e0_new = _A(ca, i, j) * _A(e0[0], i, j) + _A(cb, i, j) * (_A(h0, i, j+1) - _A(h0, i, j));
-			real e1_new = _A(ca, i, j) * _A(e0[1], i, j) - _A(cb, i, j) * (_A(h0, i+1, j) - _A(h0, i, j));
+			real e0 = _A(ca, i, j) * _A3(e, i, j, 0) + _A(cb, i, j) * (_A(h0, i, j+1) - _A(h0, i, j));
+			real e1 = _A(ca, i, j) * _A3(e, i, j, 1) - _A(cb, i, j) * (_A(h0, i+1, j) - _A(h0, i, j));
         
-			real ey = _A(ca, i, j-1) * _A(e0[0], i, j-1) + _A(cb, i, j-1) * (_A(h0, i, j) - _A(h0, i, j-1));
-			real ex = _A(ca, i-1, j) * _A(e0[1], i-1, j) - _A(cb, i-1, j) * (_A(h0, i, j) - _A(h0, i-1, j));
+			real ey = _A(ca, i, j-1) * _A3(e, i, j-1, 0) + _A(cb, i, j-1) * (_A(h0, i, j) - _A(h0, i, j-1));
+			real ex = _A(ca, i-1, j) * _A3(e, i-1, j, 1) - _A(cb, i-1, j) * (_A(h0, i, j) - _A(h0, i-1, j));
 
-			_A(e1[0], i, j) = e0_new;
-			_A(e1[1], i, j) = e1_new;
+			_A3(e, i, j, 0) = e0;
+			_A3(e, i, j, 1) = e1;
 
-			real h = _A(da, i, j) * _A(h0, i, j) + _A(db, i, j) * (e0_new - ey + ex - e1_new);;
+			real h = _A(da, i, j) * _A(h0, i, j) + _A(db, i, j) * (e0 - ey + ex - e1);
 			_A(h1, i, j) = h;
 			
-			_A(u_em1, i, j) = _A(u_em0, i, j) + 0.5 * (h * h / mu + epsilon * (e0_new * e0_new + e1_new * e1_new));
+			_A(u_em1, i, j) = _A(u_em0, i, j) + 0.5 * (h * h / mu + epsilon * (e0 * e0 + e1 * e1));
 		}
 	}
 #endif
@@ -160,13 +153,7 @@ int main(int argc, char* argv[])
 	size_t szarray = (size_t)nx * ny;
 	size_t szarrayb = szarray * sizeof(real);
 
-	typedef real* E[2];
-	E e0;
-	e0[0] = (real*)memalign(MEMALIGN, szarrayb);
-	e0[1] = (real*)memalign(MEMALIGN, szarrayb);
-	E e1;
-	e1[0] = (real*)memalign(MEMALIGN, szarrayb);
-	e1[1] = (real*)memalign(MEMALIGN, szarrayb);
+	real* e = (real*)memalign(MEMALIGN, 2 * szarrayb);
 	real* h0 = (real*)memalign(MEMALIGN, szarrayb);
 	real* h1 = (real*)memalign(MEMALIGN, szarrayb);
 	real* u_em0 = (real*)memalign(MEMALIGN, szarrayb);
@@ -175,25 +162,19 @@ int main(int argc, char* argv[])
 	real* cb = (real*)memalign(MEMALIGN, szarrayb);
 	real* da = (real*)memalign(MEMALIGN, szarrayb);
 	real* db = (real*)memalign(MEMALIGN, szarrayb);
-	real *e0_0 = NULL;
-	real *e0_1 = NULL;
-	real *e1_0 = NULL;
-	real *e1_1 = NULL;
 
-	if (!e0[0] || !e0[1] || !e1[0] || !e1[1] || !h0 || !h1 || !u_em0 || !u_em1 || !ca || !cb || !da || !db)
+	if (!e || !h0 || !h1 || !u_em0 || !u_em1 || !ca || !cb || !da || !db)
 	{
-		printf("Error allocating memory for arrays: %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p\n",
-			e0[0], e0[1], e1[0], e1[1], h0, h1, u_em0, u_em1, ca, cb, da, db);
+		printf("Error allocating memory for arrays: %p, %p, %p, %p, %p, %p, %p, %p, %p\n",
+			e, h0, h1, u_em0, u_em1, ca, cb, da, db);
 		exit(1);
 	}
 
 	real mean = 0.0f;
 	for (int i = 0; i < szarray; i++)
 	{
-		e0[0][i] = real_rand();
-		e0[1][i] = real_rand();
-		e1[0][i] = real_rand();
-		e1[1][i] = real_rand();
+		e[2 * i] = real_rand();
+		e[2 * i + 1] = real_rand();
 		h0[i] = real_rand();
 		h1[i] = real_rand();
 		u_em0[i] = real_rand();
@@ -202,7 +183,7 @@ int main(int argc, char* argv[])
 		cb[i] = real_rand();
 		da[i] = real_rand();
 		db[i] = real_rand();
-		mean += e0[0][i] + e0[1][i] + e1[0][i] + e1[1][i] + h0[i] + h1[i] + u_em0[i] + u_em1[i] + ca[i] + cb[i] + da[i] + db[i];
+		mean += e[2 * i] + e[2 * i + 1] + h0[i] + h1[i] + u_em0[i] + u_em1[i] + ca[i] + cb[i] + da[i] + db[i];
 	}
 	printf("initial mean = %f\n", mean / szarray / 12);
 
@@ -217,10 +198,7 @@ int main(int argc, char* argv[])
 #if defined(_MIC)
 	get_time(&init_s);
 	#pragma offload target(mic) \
-		nocopy(e0[0]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e0[1]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e1[0]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e1[1]:length(szarray) alloc_if(0) free_if(0)), \
+		nocopy(e:length(2 * szarray) alloc_if(0) free_if(0)), \
 		nocopy(h0:length(szarray) alloc_if(0) free_if(0)), \
 		nocopy(h1:length(szarray) alloc_if(0) free_if(0)), \
 		nocopy(u_em0:length(szarray) alloc_if(0) free_if(0)), \
@@ -261,10 +239,7 @@ int main(int argc, char* argv[])
 #if defined(_MIC)
 	get_time(&alloc_s);
 	#pragma offload target(mic) \
-		nocopy(e0[0]:length(szarray) alloc_if(1) free_if(0)), \
-		nocopy(e0[1]:length(szarray) alloc_if(1) free_if(0)), \
-		nocopy(e1[0]:length(szarray) alloc_if(1) free_if(0)), \
-		nocopy(e1[1]:length(szarray) alloc_if(1) free_if(0)), \
+		nocopy(e:length(2 * szarray) alloc_if(1) free_if(0)), \
 		nocopy(h0:length(szarray) alloc_if(1) free_if(0)), \
 		nocopy(h1:length(szarray) alloc_if(1) free_if(0)), \
 		nocopy(u_em0:length(szarray) alloc_if(1) free_if(0)), \
@@ -278,19 +253,16 @@ int main(int argc, char* argv[])
 #endif
 #if defined(_OPENACC)
 	get_time(&alloc_s);
-	e0_1 = e0[1];
-	e1_1 = e1[1];
-	#pragma acc data create (e0_1[0:szarray], e1_1[0:szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
+	#pragma acc data create (e[0:2 * szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
 	{
 	get_time(&alloc_f);
 #endif
 #if defined(__CUDACC__)
 	get_time(&alloc_s);
-	float *e0_1_dev = NULL, *e1_1_dev = NULL, *h0_dev = NULL, *h1_dev = NULL;
-	float *u_em0_dev = NULL, *u_em1_dev = NULL, *ca_dev = NULL, *cb_dev = NULL;
-	float *da_dev = NULL, *db_dev = NULL;
-	CUDA_SAFE_CALL(cudaMalloc(&e0_1_dev, szarrayb));
-	CUDA_SAFE_CALL(cudaMalloc(&e1_1_dev, szarrayb));
+	real *e_dev = NULL, *h0_dev = NULL, *h1_dev = NULL;
+	real *u_em0_dev = NULL, *u_em1_dev = NULL, *ca_dev = NULL, *cb_dev = NULL;
+	real *da_dev = NULL, *db_dev = NULL;
+	CUDA_SAFE_CALL(cudaMalloc(&e_dev, 2 * szarrayb));
 	CUDA_SAFE_CALL(cudaMalloc(&h0_dev, szarrayb));
 	CUDA_SAFE_CALL(cudaMalloc(&h1_dev, szarrayb));
 	CUDA_SAFE_CALL(cudaMalloc(&u_em0_dev, szarrayb));
@@ -316,10 +288,7 @@ int main(int argc, char* argv[])
 #if defined(_MIC)
 	get_time(&load_s);
 	#pragma offload target(mic) \
-		in(e0[0]:length(szarray) alloc_if(0) free_if(0)), \
-		in(e0[1]:length(szarray) alloc_if(0) free_if(0)), \
-		in(e1[0]:length(szarray) alloc_if(0) free_if(0)), \
-		in(e1[1]:length(szarray) alloc_if(0) free_if(0)), \
+		in(e:length(2 * szarray) alloc_if(0) free_if(0)), \
 		in(h0:length(szarray) alloc_if(0) free_if(0)), \
 		in(h1:length(szarray) alloc_if(0) free_if(0)), \
 		in(u_em0:length(szarray) alloc_if(0) free_if(0)), \
@@ -333,15 +302,12 @@ int main(int argc, char* argv[])
 #endif
 #if defined(_OPENACC)
 	get_time(&load_s);
-	e0_1 = e0[1];
-	e1_1 = e1[1];
-	#pragma acc update device(e0_1[0:szarray], e1_1[0:szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
+	#pragma acc update device(e[0:2 * szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
 	get_time(&load_f);
 #endif
 #if defined(__CUDACC__)
 	get_time(&load_s);
-	CUDA_SAFE_CALL(cudaMemcpy(e0_1_dev, e0_1, szarrayb, cudaMemcpyHostToDevice));
-	CUDA_SAFE_CALL(cudaMemcpy(e1_1_dev, e1_1, szarrayb, cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy(e_dev, e, 2 * szarrayb, cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(h0_dev, h0, szarrayb, cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(h1_dev, h1, szarrayb, cudaMemcpyHostToDevice));
 	CUDA_SAFE_CALL(cudaMemcpy(u_em0_dev, u_em0, szarrayb, cudaMemcpyHostToDevice));
@@ -365,10 +331,7 @@ int main(int argc, char* argv[])
 	get_time(&compute_s);
 #if defined(_MIC)
 	#pragma offload target(mic) \
-		nocopy(e0[0]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e0[1]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e1[0]:length(szarray) alloc_if(0) free_if(0)), \
-		nocopy(e1[1]:length(szarray) alloc_if(0) free_if(0)), \
+		nocopy(e:length(2 * szarray) alloc_if(0) free_if(0)), \
 		nocopy(h0:length(szarray) alloc_if(0) free_if(0)), \
 		nocopy(h1:length(szarray) alloc_if(0) free_if(0)), \
 		nocopy(u_em0:length(szarray) alloc_if(0) free_if(0)), \
@@ -383,23 +346,25 @@ int main(int argc, char* argv[])
 	kernelgen_cuda_configure_gird(1, nx, ny, 1, &config);
 #endif
 	{
-		E *e0p = &e0, *e1p = &e1;
+#if !defined(__CUDACC__) || defined(_PPCG)
 		real *h0p = h0, *h1p = h1;
 		real *u_em0p = u_em0, *u_em1p = u_em1;
-		
+#else
+		real *h0p = h0_dev, *h1p = h1_dev;
+		real *u_em0p = u_em0_dev, *u_em1p = u_em1_dev;
+#endif
 		for (int it = 0; it < nt; it++)
 		{
 #if !defined(__CUDACC__)
-			whispering(nx, ny, mu, epsilon, *e0p, *e1p, h0p, h1p, u_em0p, u_em1p, ca, cb, da, db);
+			whispering(nx, ny, mu, epsilon, e, h0p, h1p, u_em0p, u_em1p, ca, cb, da, db);
 #else
 			whispering<<<config.gridDim, config.blockDim, config.szshmem>>>(
 				nx, ny,
 				config,
-				mu, epsilon, *e0p, *e1p, h0p, h1p, u_em0p, u_em1p, ca, cb, da, db);
+				mu, epsilon, e_dev, h0p, h1p, u_em0p, u_em1p, ca_dev, cb_dev, da_dev, db_dev);
 			CUDA_SAFE_CALL(cudaGetLastError());
 			CUDA_SAFE_CALL(cudaDeviceSynchronize());
 #endif
-			E *e = e0p; e0p = e1p; e1p = e;
 			real* h = h0p; h0p = h1p; h1p = h;
 			real* u_em = u_em0p; u_em0p = u_em1p; u_em1p = u_em;
 			int idx = idxs[0]; idxs[0] = idxs[1]; idxs[1] = idx;
@@ -409,9 +374,6 @@ int main(int argc, char* argv[])
 	double compute_t = get_time_diff((struct timespec*)&compute_s, (struct timespec*)&compute_f);
 	if (!no_timing) printf("compute time = %f sec\n", compute_t);
 
-	E e[] = { { e0[0], e0[1] }, { e1[0], e1[1] } }; 
-	e0[0] = e[idxs[0]][0]; e0[1] = e[idxs[0]][1];
-	e1[0] = e[idxs[1]][0]; e1[1] = e[idxs[1]][1];
 	real* h[] = { h0, h1 };
 	h0 = h[idxs[0]]; h1 = h[idxs[1]];
 	real* u_em[] = { u_em0, u_em1 };
@@ -427,10 +389,7 @@ int main(int argc, char* argv[])
 #if defined(_MIC)
 	get_time(&save_s);
 	#pragma offload target(mic) \
-		out(e0[0]:length(szarray) alloc_if(0) free_if(0)), \
-		out(e0[1]:length(szarray) alloc_if(0) free_if(0)), \
-		out(e1[0]:length(szarray) alloc_if(0) free_if(0)), \
-		out(e1[1]:length(szarray) alloc_if(0) free_if(0)), \
+		out(e:length(2 * szarray) alloc_if(0) free_if(0)), \
 		out(h0:length(szarray) alloc_if(0) free_if(0)), \
 		out(h1:length(szarray) alloc_if(0) free_if(0)), \
 		out(u_em0:length(szarray) alloc_if(0) free_if(0)), \
@@ -444,15 +403,12 @@ int main(int argc, char* argv[])
 #endif
 #if defined(_OPENACC)
 	get_time(&save_s);
-	e0_1 = e0[1];
-	e1_1 = e1[1];
-	#pragma acc update host (e0_1[0:szarray], e1_1[0:szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
+	#pragma acc update host (e[0:2 * szarray], h0[0:szarray], h1[0:szarray], u_em0[0:szarray], u_em1[0:szarray], ca[0:szarray], cb[0:szarray], da[0:szarray], db[0:szarray])
 	get_time(&save_f);
 #endif
 #if defined(__CUDACC__)
 	get_time(&save_s);
-	CUDA_SAFE_CALL(cudaMemcpy(e0_1, e0_1_dev, szarrayb, cudaMemcpyDeviceToHost));
-	CUDA_SAFE_CALL(cudaMemcpy(e1_1, e1_1_dev, szarrayb, cudaMemcpyDeviceToHost));
+	CUDA_SAFE_CALL(cudaMemcpy(e, e_dev, 2 * szarrayb, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaMemcpy(h0, h0_dev, szarrayb, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaMemcpy(h1, h1_dev, szarrayb, cudaMemcpyDeviceToHost));
 	CUDA_SAFE_CALL(cudaMemcpy(u_em0, u_em0_dev, szarrayb, cudaMemcpyDeviceToHost));
@@ -481,10 +437,7 @@ int main(int argc, char* argv[])
 #if defined(_MIC)
 	get_time(&free_s);
 	#pragma offload target(mic) \
-		nocopy(e0[0]:length(szarray) alloc_if(0) free_if(1)), \
-		nocopy(e0[1]:length(szarray) alloc_if(0) free_if(1)), \
-		nocopy(e1[0]:length(szarray) alloc_if(0) free_if(1)), \
-		nocopy(e1[1]:length(szarray) alloc_if(0) free_if(1)), \
+		nocopy(e:length(2 * szarray) alloc_if(0) free_if(1)), \
 		nocopy(h0:length(szarray) alloc_if(0) free_if(1)), \
 		nocopy(h1:length(szarray) alloc_if(0) free_if(1)), \
 		nocopy(u_em0:length(szarray) alloc_if(0) free_if(1)), \
@@ -498,16 +451,15 @@ int main(int argc, char* argv[])
 #endif
 #if defined(__CUDACC__)
 	get_time(&free_s);
-	CUDA_SAFE_CALL(cudaFree(e0_1_dev));
-	CUDA_SAFE_CALL(cudaFree(e1_1_dev));
+	CUDA_SAFE_CALL(cudaFree(e_dev));
 	CUDA_SAFE_CALL(cudaFree(h0_dev));
 	CUDA_SAFE_CALL(cudaFree(h1_dev));
-	CUDA_SAFE_CALL(cudaFree(u_em0));
-	CUDA_SAFE_CALL(cudaFree(u_em1));
-	CUDA_SAFE_CALL(cudaFree(ca));
-	CUDA_SAFE_CALL(cudaFree(cb));
-	CUDA_SAFE_CALL(cudaFree(da));
-	CUDA_SAFE_CALL(cudaFree(db));
+	CUDA_SAFE_CALL(cudaFree(u_em0_dev));
+	CUDA_SAFE_CALL(cudaFree(u_em1_dev));
+	CUDA_SAFE_CALL(cudaFree(ca_dev));
+	CUDA_SAFE_CALL(cudaFree(cb_dev));
+	CUDA_SAFE_CALL(cudaFree(da_dev));
+	CUDA_SAFE_CALL(cudaFree(db_dev));
 	get_time(&free_f);
 #endif
 	double free_t = get_time_diff((struct timespec*)&free_s, (struct timespec*)&free_f);
@@ -519,14 +471,11 @@ int main(int argc, char* argv[])
 	mean = 0.0f;
 	for (int i = 0; i < szarray; i++)
 	{
-		mean += e1[0][i] + e1[1][i] + h1[i] + u_em1[i];
+		mean += e[2 * i] + e[2 * i + 1] + h1[i] + u_em1[i];
 	}
 	printf("final mean = %f\n", mean / szarray / 4);
 
-	free(e0[0]);
-	free(e0[1]);
-	free(e1[0]);
-	free(e1[1]);
+	free(e);
 	free(h0);
 	free(h1);
 	free(u_em0);

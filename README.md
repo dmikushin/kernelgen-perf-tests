@@ -70,7 +70,7 @@ Plot performance results into a pdf figure:
 > ./benchmark
 Usage: benchmark <nx> <ny> <ns> <niters> <nruns> <target> [<target>]
 Example: kernelgen_runmode=1 kernelgen_szheap=$((1024*1024*800)) kernelgen_verbose=$((1<<6)) ./benchmark 512 256 256 10 10 kernelgen gcc
-                                      ^
+
 > bash -c 'kernelgen_runmode=1 kernelgen_szheap=$((1024*1024*800)) kernelgen_verbose=$((1<<6)) ./benchmark 512 256 256 10 10 cuda'
 Found test divergence
 Found test gameoflife
